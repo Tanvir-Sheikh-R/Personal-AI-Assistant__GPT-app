@@ -73,7 +73,7 @@ def generate_output(query:str, vector_store):
 
 
 
-query = "সাকিবের বাবা কি বলেন?"
+query = "Who is tanvir"
 
 pdf_file = ['Tanvir AI-ML CV.pdf', 'Program-2026.pdf']
 vector_store = Initialize_doc_to_VectorStore(pdf_file)

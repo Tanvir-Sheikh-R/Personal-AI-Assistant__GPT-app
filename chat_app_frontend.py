@@ -51,10 +51,23 @@ add_thread(st.session_state['thread_id'])
 # ****************************** SideBar UI ******************************
 
 with st.sidebar:
-    st.title('AI Assistant')
+    # st.title('AI Assistant')
 
     if st.button('New Chat', width='stretch', type='primary'):
         reset_chat()
+
+    st.divider()
+    st.header('Knowledge Base')
+
+    uploaded_files = st.file_uploader(
+        'Upload documents',
+        type=['pdf', 'docx', 'txt', 'md'],
+        accept_multiple_files=True,
+    )
+
+    uploaded_names = {up.name for up in uploaded_files} if uploaded_files else set()
+    indexed_names = set(st.session_state.indexed_docs)
+        
 
     st.header('Chat history')
 
