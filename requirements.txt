@@ -5,4 +5,4 @@ langchain
 ipykernel
 ipython
 langchain-groq
-
+langchain-huggingface
