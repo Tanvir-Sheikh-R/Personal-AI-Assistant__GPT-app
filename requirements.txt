@@ -6,3 +6,9 @@ ipykernel
 ipython
 langchain-groq
 langchain-huggingface
+langchain-text-splitters
+langchain-chroma
+langchain-community
+pypdf
+sentence_transformers
+pydantic

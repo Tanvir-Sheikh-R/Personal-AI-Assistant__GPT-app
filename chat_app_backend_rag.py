@@ -36,7 +36,7 @@ def Initialize_doc_to_VectorStore(pdf_file:list):
 def generate_output(query:str, vector_store):
 
     class SimilarQueries(BaseModel):
-        similer_queries : list[str] = Field(description="2 diverse queries related to the original query")
+        similar_queries : list[str] = Field(description="2 diverse queries related to the original query")
 
     prompt_template = PromptTemplate(
         template="""
@@ -51,7 +51,7 @@ def generate_output(query:str, vector_store):
 
     structured_llm = llm.with_structured_output(SimilarQueries)
     result = structured_llm.invoke(prompt)
-    final_prompt = [query] + result.similer_queries
+    final_prompt = [query] + result.similar_queries
 
     metadatas = []
     content = []

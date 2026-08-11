@@ -26,6 +26,7 @@ def get_summary_for_chatHead(user: str):
 class MessageState(TypedDict):
     message : Annotated[list[BaseMessage], add_messages]
 
+
 load_dotenv()
 llm = ChatGroq(model='llama-3.1-8b-instant', temperature=0.2)
 

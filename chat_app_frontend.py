@@ -1,7 +1,7 @@
 import streamlit as st
 from ui import load_page_style
 import numpy as np
-from chat_app_backend import chat, checkpointer,get_summary_for_chatHead
+from chat_app_backend import chat, checkpointer, get_summary_for_chatHead
 from langgraph.graph import StateGraph
 from langchain_core.messages import HumanMessage, AIMessage
 import uuid
@@ -51,7 +51,7 @@ add_thread(st.session_state['thread_id'])
 # ****************************** SideBar UI ******************************
 
 with st.sidebar:
-    # st.title('AI Assistant')
+    st.title('AI Assistant')
 
     if st.button('New Chat', width='stretch', type='primary'):
         reset_chat()
@@ -66,10 +66,11 @@ with st.sidebar:
     )
 
     uploaded_names = {up.name for up in uploaded_files} if uploaded_files else set()
-    indexed_names = set(st.session_state.indexed_docs)
+
         
 
     st.header('Chat history')
+    st.divider()
 
     for id in st.session_state.thread_id_list[::-1]:
         conversation = load_conversation(id)
@@ -79,7 +80,7 @@ with st.sidebar:
             summery = get_summary_for_chatHead(user)
             
 
-            if st.button(summery, width='stretch'):
+            if st.button(summery, width='stretch', key = id): 
                 response = load_conversation(id)
                 temp_message = []
 
@@ -111,7 +112,7 @@ for messages in st.session_state['message']:
             st.write(messages['msg'])
          
 
-user_input = st.chat_input("Type here")
+user_input = st.chat_input("Type here", accept_file=True)
 CONFIG = {'configurable': {'thread_id': st.session_state.thread_id}}
 
 if user_input:
