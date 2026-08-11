@@ -1,35 +1,103 @@
+import streamlit as st
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    Docx2txtLoader,
+    TextLoader,
+)
 from langchain_chroma import Chroma
 from langchain_core.prompts import PromptTemplate
 from langchain_huggingface import HuggingFaceEmbeddings, embeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.tools import tool
+from langchain_core.messages import HumanMessage, ToolMessage
 import warnings
+import os
+
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="langchain_community")
 
-load_dotenv()
-llm = ChatGroq(model='llama-3.1-8b-instant', temperature=0.2)
 
-def Initialize_doc_to_VectorStore(pdf_file:list):
-    pdfs = []
-    for file in pdf_file:
-        pdf_loader = PyPDFLoader(file)
-        pdfs.extend(pdf_loader.load())
+
+load_dotenv()
+llm = ChatGroq(model='llama-3.3-70b-versatile', temperature=0.2)
+
+
+
+# ********************Embedding**********************
+EMBED_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".hf_cache")
+EMBED_MODEL = "all-MiniLM-L6-v2"
+
+_embeddings_instance = None
+_vectorstore_instance = None
+
+
+def get_embeddings() -> HuggingFaceEmbeddings:
+    global _embeddings_instance
+    if _embeddings_instance is None:
+        _embeddings_instance = HuggingFaceEmbeddings(
+            model_name=EMBED_MODEL,
+            cache_folder=EMBED_CACHE,
+        )
+    return _embeddings_instance
+
+
+def get_vectorstore() -> Chroma:
+    global _vectorstore_instance
+    if _vectorstore_instance is None:
+        _vectorstore_instance = Chroma(
+            persist_directory="vectorstore",
+            embedding_function=get_embeddings(),
+            collection_name="file_embeddings",
+        )
+    return _vectorstore_instance
+
+
+
+
+def load_and_split(file_paths: list[str]):
+    all_docs = []
+    for file in file_paths:
+        ext = file.split(".")[-1].lower()
+        if ext == "pdf":
+            all_docs.extend(PyPDFLoader(file).load())
+        elif ext == "docx":
+            all_docs.extend(Docx2txtLoader(file).load())
+        elif ext in ("txt", "md"):
+            all_docs.extend(TextLoader(file, encoding="utf-8").load())
+        else:
+            raise ValueError(f"Unsupported file type: {ext}")
 
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
-        separators=["\n\n\n", "\n\n", "\n", "  ", " ", ""]
+        chunk_size=800,
+        chunk_overlap=150,
+        separators=["\n\n\n", "\n\n", "\n", "  ", " ", ""],
     )
-    chuncks = splitter.split_documents(pdfs)
+    return splitter.split_documents(all_docs)
 
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-    vector_store = Chroma.from_documents(chuncks, embedding=embeddings, collection_name="pdf_embeddings")
 
+def add_documents_to_store(file_paths: list[str]):
+    chunks = load_and_split(file_paths)
+    for chunk in chunks:
+        chunk.metadata["source"] = os.path.basename(chunk.metadata.get("source", ""))
+    vector_store = get_vectorstore()
+    vector_store.add_documents(chunks)   # <-- appends, doesn't recreate
     return vector_store
+
+
+
+
+def delete_documents_from_store(file_paths: list[str]):
+    try:
+        vector_store = get_vectorstore()
+        filenames = [os.path.basename(f) for f in file_paths]
+        vector_store._collection.delete(where={"source": {"$in": filenames}})
+        return True
+    except Exception as e:
+        print(f"Error deleting {file_paths}: {e}")
+        return False
 
 
 
@@ -73,11 +141,36 @@ def generate_output(query:str, vector_store):
 
 
 
-query = "Who is tanvir"
 
-pdf_file = ['Tanvir AI-ML CV.pdf', 'Program-2026.pdf']
-vector_store = Initialize_doc_to_VectorStore(pdf_file)
-generated_output = generate_output(query, vector_store)
+@tool
+def rag_tool(query : str):
 
-print("Generated Output:\n", generated_output)
+    """Search and retrieve relevant information from the user's uploaded documents 
+    or knowledge base.
 
+    Use this tool whenever the user asks a question that could be answered by 
+    specific facts, data, definitions, or content that may exist in their documents 
+    — including questions about people, projects, numbers, dates, or anything not 
+    considered common/general knowledge.
+
+    Do NOT use this tool for:
+    - Greetings or small talk (e.g. "hi", "how are you")
+    - Simple math or logic questions
+    - General knowledge the model already knows confidently
+    - Follow-up questions that are just clarifying tone/formatting, not facts
+
+    Args:
+        query: A clear, standalone search query representing what the user wants 
+        to find. Rephrase vague or pronoun-heavy user questions into a specific, 
+        self-contained query (e.g., convert "what about its pricing?" into 
+        "product pricing details").
+
+    Returns:
+        A string containing the most relevant retrieved passages, or a message 
+        indicating no relevant documents were found.
+    """
+
+    vector_store = Initialize_doc_to_VectorStore(st.session_state['pdf_files'])
+    generated_output = generate_output(query, vector_store)
+
+    return generated_output

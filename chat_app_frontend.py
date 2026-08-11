@@ -46,6 +46,9 @@ if 'thread_id_list' not in st.session_state:
 
 add_thread(st.session_state['thread_id'])
 
+if 'pdf_files' not in st.session_state:
+    st.session_state['pdf_files'] = []
+
 
 
 # ****************************** SideBar UI ******************************
@@ -65,9 +68,16 @@ with st.sidebar:
         accept_multiple_files=True,
     )
 
-    uploaded_names = {up.name for up in uploaded_files} if uploaded_files else set()
+    if uploaded_files:
+        all_docs = []
+        for uploaded_file in uploaded_files:
+            st.write(f"Processing: {uploaded_file.name}")
+            # e.g. pass bytes to a PDF loader
+            file_bytes = uploaded_file.read()
+            # your_pdf_loader(file_bytes) -> chunks
+            # all_docs.extend(chunks)
+            st.session_state['pdf_files'].append(file_bytes)
 
-        
 
     st.header('Chat history')
     st.divider()
