@@ -33,7 +33,7 @@ _embeddings_instance = None
 _vectorstore_instance = None
 
 
-def get_embeddings() -> HuggingFaceEmbeddings:
+def _get_embeddings() -> HuggingFaceEmbeddings:
     global _embeddings_instance
     if _embeddings_instance is None:
         _embeddings_instance = HuggingFaceEmbeddings(
@@ -43,12 +43,12 @@ def get_embeddings() -> HuggingFaceEmbeddings:
     return _embeddings_instance
 
 
-def get_vectorstore() -> Chroma:
+def _get_vectorstore() -> Chroma:
     global _vectorstore_instance
     if _vectorstore_instance is None:
         _vectorstore_instance = Chroma(
             persist_directory="vectorstore",
-            embedding_function=get_embeddings(),
+            embedding_function=_get_embeddings(),
             collection_name="file_embeddings",
         )
     return _vectorstore_instance
@@ -56,7 +56,7 @@ def get_vectorstore() -> Chroma:
 
 
 
-def load_and_split(file_paths: list[str]):
+def _load_and_split(file_paths: list[str]):
     all_docs = []
     for file in file_paths:
         ext = file.split(".")[-1].lower()
@@ -79,10 +79,10 @@ def load_and_split(file_paths: list[str]):
 
 
 def add_documents_to_store(file_paths: list[str]):
-    chunks = load_and_split(file_paths)
+    chunks = _load_and_split(file_paths)
     for chunk in chunks:
         chunk.metadata["source"] = os.path.basename(chunk.metadata.get("source", ""))
-    vector_store = get_vectorstore()
+    vector_store = _get_vectorstore()
     vector_store.add_documents(chunks)   # <-- appends, doesn't recreate
     return vector_store
 
@@ -91,7 +91,7 @@ def add_documents_to_store(file_paths: list[str]):
 
 def delete_documents_from_store(file_paths: list[str]):
     try:
-        vector_store = get_vectorstore()
+        vector_store = _get_vectorstore()
         filenames = [os.path.basename(f) for f in file_paths]
         vector_store._collection.delete(where={"source": {"$in": filenames}})
         return True
@@ -170,7 +170,30 @@ def rag_tool(query : str):
         indicating no relevant documents were found.
     """
 
-    vector_store = Initialize_doc_to_VectorStore(st.session_state['pdf_files'])
+    vector_store = add_documents_to_store(st.session_state['pdf_files'])
     generated_output = generate_output(query, vector_store)
 
     return generated_output
+
+
+
+# llm_with_tools = llm.bind_tools([rag_tool])
+
+# message = [HumanMessage(content=st.session_state['message'][-1])]
+# result = llm_with_tools.invoke(message)
+# message.append(result)
+
+# if result.tool_calls:
+#     for tool_call in result.tool_calls:
+#         if tool_call["name"] == "rag_tool":
+#             output = rag_tool.invoke(tool_call["args"])
+#         else:
+#             output = f"Error: unknown tool '{tool_call['name']}'"
+#         message.append(ToolMessage(content=str(output), tool_call_id=tool_call["id"]))
+
+#     final_result = llm.invoke(message)
+#     print(final_result.content)
+# else:
+#     print(result.content)
+
+print(st.session_state['message'][-1])

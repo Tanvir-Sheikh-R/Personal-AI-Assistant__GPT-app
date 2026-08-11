@@ -122,7 +122,21 @@ for messages in st.session_state['message']:
             st.write(messages['msg'])
          
 
-user_input = st.chat_input("Type here", accept_file=True)
+user_input = st.chat_input(
+                        "Type here", 
+                        # accept_file=True, 
+                        # file_type=['pdf', 'docx', 'txt', 'md']
+                        )
+
+# if user_input:
+#     text = user_input.text          
+#     files = user_input.files        
+
+#     if files:
+#         for f in files:
+#             st.write(f"Attached: {f.name}")
+#             file_bytes = f.getvalue()
+
 CONFIG = {'configurable': {'thread_id': st.session_state.thread_id}}
 
 if user_input:
