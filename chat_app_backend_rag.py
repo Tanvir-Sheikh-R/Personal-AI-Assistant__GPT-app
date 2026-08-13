@@ -59,7 +59,7 @@ def _get_vectorstore() -> Chroma:
 def _load_and_split(file_paths: list[str]):
     all_docs = []
     for file in file_paths:
-        ext = file.split(".")[-1].lower()
+        ext = file.name.split(".")[-1].lower()
         if ext == "pdf":
             all_docs.extend(PyPDFLoader(file).load())
         elif ext == "docx":

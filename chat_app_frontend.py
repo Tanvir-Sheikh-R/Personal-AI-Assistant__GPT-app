@@ -1,4 +1,5 @@
 import streamlit as st
+from chat_app_backend_rag import add_documents_to_store
 from ui import load_page_style
 import numpy as np
 from chat_app_backend import chat, checkpointer, get_summary_for_chatHead
@@ -59,24 +60,24 @@ with st.sidebar:
     if st.button('New Chat', width='stretch', type='primary'):
         reset_chat()
 
-    st.divider()
-    st.header('Knowledge Base')
+    # st.divider()
+    # st.header('Knowledge Base')
 
-    uploaded_files = st.file_uploader(
-        'Upload documents',
-        type=['pdf', 'docx', 'txt', 'md'],
-        accept_multiple_files=True,
-    )
+    # uploaded_files = st.file_uploader(
+    #     'Upload documents',
+    #     type=['pdf', 'docx', 'txt', 'md'],
+    #     accept_multiple_files=True,
+    # )
 
-    if uploaded_files:
-        all_docs = []
-        for uploaded_file in uploaded_files:
-            st.write(f"Processing: {uploaded_file.name}")
-            # e.g. pass bytes to a PDF loader
-            file_bytes = uploaded_file.read()
-            # your_pdf_loader(file_bytes) -> chunks
-            # all_docs.extend(chunks)
-            st.session_state['pdf_files'].append(file_bytes)
+    # if uploaded_files:
+    #     all_docs = []
+    #     for uploaded_file in uploaded_files:
+    #         st.write(f"Processing: {uploaded_file.name}")
+    #         # e.g. pass bytes to a PDF loader
+    #         file_bytes = uploaded_file.read()
+    #         # your_pdf_loader(file_bytes) -> chunks
+    #         # all_docs.extend(chunks)
+    #         st.session_state['pdf_files'].append(file_bytes)
 
 
     st.header('Chat history')
@@ -124,37 +125,39 @@ for messages in st.session_state['message']:
 
 user_input = st.chat_input(
                         "Type here", 
-                        # accept_file=True, 
-                        # file_type=['pdf', 'docx', 'txt', 'md']
+                        accept_file=True, 
+                        file_type=['pdf', 'docx', 'txt', 'md']
                         )
 
-# if user_input:
-#     text = user_input.text          
-#     files = user_input.files        
+if user_input:
+    text = user_input.text          
+    files = user_input.files        
 
-#     if files:
-#         for f in files:
-#             st.write(f"Attached: {f.name}")
-#             file_bytes = f.getvalue()
+    if files:
+        for f in files:
+            st.write(f"Attached: {f.name}")
+            # file_bytes = f.getvalue()
+            add_documents_to_store(f)
 
 CONFIG = {'configurable': {'thread_id': st.session_state.thread_id}}
 
 if user_input:
-    st.session_state.message.append({'role': 'user', 'msg': user_input})
+    st.session_state.message.append({'role': 'user', 'msg': text})
 
     with st.chat_message('user'):
-            st.write(user_input)
+            st.write(text)
     
     with st.chat_message('assistant' , avatar=":material/asterisk:"):
         response = st.write_stream(
             message_chunk.content for message_chunk, metadata in chat.stream(
-                {'message': [HumanMessage(user_input)]}, 
+                {'message': [HumanMessage(text)]}, 
                 config=CONFIG, 
                 stream_mode='messages'
             ))
     st.session_state.message.append({'role': 'assistant', 'msg':  response})
+    # print(file_bytes)
     st.rerun()
-
+    
 
 # print()
 # print(st.session_state)
