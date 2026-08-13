@@ -1,14 +1,34 @@
 import streamlit as st
 from chat_app_backend_rag import add_documents_to_store
 from ui import load_page_style
-import numpy as np
-from chat_app_backend import chat, checkpointer, get_summary_for_chatHead
-from langgraph.graph import StateGraph
-from langchain_core.messages import HumanMessage, AIMessage
+from chat_app_backend import chat, get_summary_for_chatHead
+from langchain_core.messages import HumanMessage
 import uuid
+from pathlib import Path
+
 
 load_page_style()
 
+
+
+
+UPLOAD_DIR = Path('.uploaded_files')
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+
+def save_uploaded_files(files) -> list[str]:
+    saved = []
+    for f in files:
+        target = UPLOAD_DIR / f.name
+        target.write_bytes(f.getvalue())
+        saved.append(str(target))
+    return saved
+
+def cleanup_uploaded_files():
+    if UPLOAD_DIR.exists():
+        for p in UPLOAD_DIR.iterdir():
+            if p.is_file():
+                p.unlink(missing_ok=True)
 
 
 # ****************************** Utility Functions ******************************
@@ -50,6 +70,14 @@ add_thread(st.session_state['thread_id'])
 if 'pdf_files' not in st.session_state:
     st.session_state['pdf_files'] = []
 
+if 'indexed_files' not in st.session_state:
+    st.session_state['indexed_files'] = set()
+
+if 'kb_id' not in st.session_state:
+    st.session_state['kb_id'] = str(uuid.uuid4())
+
+if 'thread_titles' not in st.session_state:
+    st.session_state['thread_titles'] = {}
 
 
 # ****************************** SideBar UI ******************************
@@ -60,25 +88,6 @@ with st.sidebar:
     if st.button('New Chat', width='stretch', type='primary'):
         reset_chat()
 
-    # st.divider()
-    # st.header('Knowledge Base')
-
-    # uploaded_files = st.file_uploader(
-    #     'Upload documents',
-    #     type=['pdf', 'docx', 'txt', 'md'],
-    #     accept_multiple_files=True,
-    # )
-
-    # if uploaded_files:
-    #     all_docs = []
-    #     for uploaded_file in uploaded_files:
-    #         st.write(f"Processing: {uploaded_file.name}")
-    #         # e.g. pass bytes to a PDF loader
-    #         file_bytes = uploaded_file.read()
-    #         # your_pdf_loader(file_bytes) -> chunks
-    #         # all_docs.extend(chunks)
-    #         st.session_state['pdf_files'].append(file_bytes)
-
 
     st.header('Chat history')
     st.divider()
@@ -87,11 +96,12 @@ with st.sidebar:
         conversation = load_conversation(id)
 
         if conversation:
-            user = conversation[0].content
-            summery = get_summary_for_chatHead(user)
-            
+            if id not in st.session_state['thread_titles']:
+                user = conversation[0].content
+                st.session_state['thread_titles'][id] = get_summary_for_chatHead(user)
+            summery = st.session_state['thread_titles'][id]
 
-            if st.button(summery, width='stretch', key = id): 
+            if st.button(summery, width='stretch', key = str(id)): 
                 response = load_conversation(id)
                 temp_message = []
 
@@ -130,14 +140,38 @@ user_input = st.chat_input(
                         )
 
 if user_input:
-    text = user_input.text          
-    files = user_input.files        
+    text = user_input.text
+    files = user_input.files
 
     if files:
-        for f in files:
-            st.write(f"Attached: {f.name}")
-            # file_bytes = f.getvalue()
-            add_documents_to_store(f)
+        indexing_failed = False
+        with st.spinner("Indexing uploaded documents..."):
+            saved_paths = save_uploaded_files(files)
+            for p in saved_paths:
+                st.write(f"Uploading file: {Path(p).name}")
+
+            new_paths = [
+                p for p in saved_paths
+                if Path(p).name not in st.session_state['indexed_files']
+            ]
+
+            if new_paths:
+                try:
+                    add_documents_to_store(new_paths, collection_name=st.session_state['kb_id'])
+                    st.session_state['indexed_files'].update(
+                        Path(p).name for p in new_paths
+                    )
+                except Exception as e:
+                    # Don't let an indexing failure kill the script before the
+                    # message/checkpoint is saved -- that's what made the
+                    # sidebar history button for this thread never appear.
+                    indexing_failed = True
+                    st.warning(f"Couldn't index one or more files ({e}). Continuing without them.")
+                finally:
+                    cleanup_uploaded_files()
+
+        attached_note = "Attached (indexing failed): " if indexing_failed else "Attached: "
+        text = f"{attached_note}{', '.join(Path(p).name for p in saved_paths)}\n -> {text}"
 
 CONFIG = {'configurable': {'thread_id': st.session_state.thread_id}}
 
@@ -155,10 +189,6 @@ if user_input:
                 stream_mode='messages'
             ))
     st.session_state.message.append({'role': 'assistant', 'msg':  response})
-    # print(file_bytes)
+
     st.rerun()
     
-
-# print()
-# print(st.session_state)
-# print(list(checkpointer.list(config={'thread_id': '1'})))

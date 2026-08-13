@@ -8,8 +8,9 @@ from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from groq import RateLimitError, APIError, APIConnectionError
 from langchain_core.messages import HumanMessage, AIMessage
-from chat_app_backend_rag import add_documents_to_store, generate_output
+from chat_app_backend_rag import generate_output, _get_vectorstore
 import streamlit as st
+
 
 
 
@@ -43,10 +44,11 @@ def rag_tool(query : str):
         indicating no relevant documents were found.
     """
 
-    vector_store = add_documents_to_store(st.session_state['pdf_files'])
-    generated_output = generate_output(query, vector_store)
 
-    return generated_output
+    vector_store = _get_vectorstore(st.session_state.get('kb_id', 'file_embeddings'))
+    return generate_output(query, vector_store)
+
+
 
 
 
@@ -74,7 +76,8 @@ llm_with_tools = llm.bind_tools([rag_tool])
 
 
 def chat_message(state: MessageState):
-    message = state['message']
+    # Copy instead of mutating the reducer-owned list from state directly.
+    message = list(state['message'])
     try:
         content_get = llm_with_tools.invoke(message)
 
@@ -87,10 +90,14 @@ def chat_message(state: MessageState):
                 message.append(ToolMessage(content=str(output), tool_call_id=tool_call["id"]))
 
             final_result = llm.invoke(message)
-            response = final_result.content
+            # Always wrap in AIMessage explicitly. Returning a bare str here
+            # gets auto-coerced into a HumanMessage by add_messages, which
+            # silently mislabels the assistant's own reply as the user's
+            # when a thread is reloaded from the sidebar.
+            response = AIMessage(content=final_result.content)
 
         else:
-            response = content_get.content
+            response = AIMessage(content=content_get.content)
 
     except RateLimitError:
         response = AIMessage(

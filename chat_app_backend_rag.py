@@ -30,7 +30,8 @@ EMBED_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".hf_cach
 EMBED_MODEL = "all-MiniLM-L6-v2"
 
 _embeddings_instance = None
-_vectorstore_instance = None
+_vectorstore_cache = {}
+
 
 
 def _get_embeddings() -> HuggingFaceEmbeddings:
@@ -43,23 +44,35 @@ def _get_embeddings() -> HuggingFaceEmbeddings:
     return _embeddings_instance
 
 
-def _get_vectorstore() -> Chroma:
-    global _vectorstore_instance
-    if _vectorstore_instance is None:
-        _vectorstore_instance = Chroma(
+def _get_vectorstore(collection_name: str = "file_embeddings") -> Chroma:
+    if collection_name not in _vectorstore_cache:
+        _vectorstore_cache[collection_name] = Chroma(
             persist_directory="vectorstore",
             embedding_function=_get_embeddings(),
-            collection_name="file_embeddings",
+            collection_name=collection_name,
         )
-    return _vectorstore_instance
+    return _vectorstore_cache[collection_name]
+
+def clear_collection(collection_name: str = "file_embeddings") -> None:
+    vs = _get_vectorstore(collection_name)
+    vs.delete_collection()
+    _vectorstore_cache.pop(collection_name, None)
 
 
+def add_documents_to_store(file_paths: list[str],
+                           collection_name: str = "file_embeddings"):
+    chunks = _load_and_split(file_paths)
+    for chunk in chunks:
+        chunk.metadata["source"] = os.path.basename(chunk.metadata.get("source", ""))
+    vector_store = _get_vectorstore(collection_name)
+    vector_store.add_documents(chunks)
+    return vector_store
 
 
 def _load_and_split(file_paths: list[str]):
     all_docs = []
     for file in file_paths:
-        ext = file.name.split(".")[-1].lower()
+        ext = file.split(".")[-1].lower()
         if ext == "pdf":
             all_docs.extend(PyPDFLoader(file).load())
         elif ext == "docx":
@@ -78,20 +91,11 @@ def _load_and_split(file_paths: list[str]):
 
 
 
-def add_documents_to_store(file_paths: list[str]):
-    chunks = _load_and_split(file_paths)
-    for chunk in chunks:
-        chunk.metadata["source"] = os.path.basename(chunk.metadata.get("source", ""))
-    vector_store = _get_vectorstore()
-    vector_store.add_documents(chunks)   # <-- appends, doesn't recreate
-    return vector_store
 
-
-
-
-def delete_documents_from_store(file_paths: list[str]):
+def delete_documents_from_store(file_paths: list[str],
+                                collection_name: str = "file_embeddings"):
     try:
-        vector_store = _get_vectorstore()
+        vector_store = _get_vectorstore(collection_name)
         filenames = [os.path.basename(f) for f in file_paths]
         vector_store._collection.delete(where={"source": {"$in": filenames}})
         return True
@@ -128,6 +132,9 @@ def generate_output(query:str, vector_store):
         content.extend([doc.page_content for doc in results])
         metadatas.extend([doc.metadata for doc in results])
 
+    if not content:
+        return "No documents have been uploaded yet. Please upload a file to enable document-based answers."
+
     prompt_query = PromptTemplate(
         template="""
             Given the following context, answer the question: {query}\n
@@ -142,40 +149,44 @@ def generate_output(query:str, vector_store):
 
 
 
-@tool
-def rag_tool(query : str):
+# @tool
+# def rag_tool(query : str):
 
-    """Search and retrieve relevant information from the user's uploaded documents 
-    or knowledge base.
+#     """Search and retrieve relevant information from the user's uploaded documents 
+#     or knowledge base.
 
-    Use this tool whenever the user asks a question that could be answered by 
-    specific facts, data, definitions, or content that may exist in their documents 
-    — including questions about people, projects, numbers, dates, or anything not 
-    considered common/general knowledge.
+#     Use this tool whenever the user asks a question that could be answered by 
+#     specific facts, data, definitions, or content that may exist in their documents 
+#     — including questions about people, projects, numbers, dates, or anything not 
+#     considered common/general knowledge.
 
-    Do NOT use this tool for:
-    - Greetings or small talk (e.g. "hi", "how are you")
-    - Simple math or logic questions
-    - General knowledge the model already knows confidently
-    - Follow-up questions that are just clarifying tone/formatting, not facts
+#     Do NOT use this tool for:
+#     - Greetings or small talk (e.g. "hi", "how are you")
+#     - Simple math or logic questions
+#     - General knowledge the model already knows confidently
+#     - Follow-up questions that are just clarifying tone/formatting, not facts
 
-    Args:
-        query: A clear, standalone search query representing what the user wants 
-        to find. Rephrase vague or pronoun-heavy user questions into a specific, 
-        self-contained query (e.g., convert "what about its pricing?" into 
-        "product pricing details").
+#     Args:
+#         query: A clear, standalone search query representing what the user wants 
+#         to find. Rephrase vague or pronoun-heavy user questions into a specific, 
+#         self-contained query (e.g., convert "what about its pricing?" into 
+#         "product pricing details").
 
-    Returns:
-        A string containing the most relevant retrieved passages, or a message 
-        indicating no relevant documents were found.
-    """
+#     Returns:
+#         A string containing the most relevant retrieved passages, or a message 
+#         indicating no relevant documents were found.
+#     """
 
-    vector_store = add_documents_to_store(st.session_state['pdf_files'])
-    generated_output = generate_output(query, vector_store)
+#     vector_store = add_documents_to_store(st.session_state['pdf_files'])
+#     generated_output = generate_output(query, vector_store)
 
-    return generated_output
+#     return generated_output
 
 
+
+
+
+#  **************************** test **************************
 
 # llm_with_tools = llm.bind_tools([rag_tool])
 
@@ -196,4 +207,4 @@ def rag_tool(query : str):
 # else:
 #     print(result.content)
 
-print(st.session_state['message'][-1])
+# print(st.session_state['message'][-1])

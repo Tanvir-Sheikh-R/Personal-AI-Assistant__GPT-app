@@ -1,2 +1,5 @@
 myenv/
+.hf_cache
 .env
+.uploaded_files
+vectorstore
