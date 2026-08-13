@@ -162,16 +162,14 @@ if user_input:
                         Path(p).name for p in new_paths
                     )
                 except Exception as e:
-                    # Don't let an indexing failure kill the script before the
-                    # message/checkpoint is saved -- that's what made the
-                    # sidebar history button for this thread never appear.
+
                     indexing_failed = True
                     st.warning(f"Couldn't index one or more files ({e}). Continuing without them.")
                 finally:
                     cleanup_uploaded_files()
 
         attached_note = "Attached (indexing failed): " if indexing_failed else "Attached: "
-        text = f"{attached_note}{', '.join(Path(p).name for p in saved_paths)}\n -> {text}"
+        text = f"{attached_note}{', '.join(Path(p).name for p in saved_paths)}\n\n {text}"
 
 CONFIG = {'configurable': {'thread_id': st.session_state.thread_id}}
 

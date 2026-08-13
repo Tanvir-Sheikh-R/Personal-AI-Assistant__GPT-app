@@ -8,12 +8,20 @@ from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from groq import RateLimitError, APIError, APIConnectionError
 from langchain_core.messages import HumanMessage, AIMessage
+from sympy import sympify
 from chat_app_backend_rag import generate_output, _get_vectorstore
 import streamlit as st
 
 
 
-
+@tool
+def calculator(expression: str) -> str:
+    """Calculate a mathematical expression."""
+    try:
+        result = sympify(expression).evalf()
+        return str(result)
+    except Exception as e:
+        return f"Error: {e}"
 
 
 @tool
@@ -62,8 +70,8 @@ def get_summary_for_chatHead(user: str):
                 - Return ONLY the title text, nothing else
                 User's message:{user}"""
 
-    resposce = llm.invoke(prompt)
-    return resposce.content
+    response = llm.invoke(prompt)
+    return response.content
 
 
 class MessageState(TypedDict):
@@ -72,7 +80,7 @@ class MessageState(TypedDict):
 
 load_dotenv()
 llm = ChatGroq(model='llama-3.3-70b-versatile', temperature=0.2)
-llm_with_tools = llm.bind_tools([rag_tool])
+llm_with_tools = llm.bind_tools([rag_tool, calculator])
 
 
 def chat_message(state: MessageState):
@@ -85,19 +93,19 @@ def chat_message(state: MessageState):
             for tool_call in content_get.tool_calls:
                 if tool_call["name"] == "rag_tool":
                     output = rag_tool.invoke(tool_call["args"])
+
+                elif tool_call["name"] == "calculator":
+                    output = calculator.invoke(tool_call["args"])
                 else:
                     output = f"Error: unknown tool '{tool_call['name']}'"
                 message.append(ToolMessage(content=str(output), tool_call_id=tool_call["id"]))
 
             final_result = llm.invoke(message)
-            # Always wrap in AIMessage explicitly. Returning a bare str here
-            # gets auto-coerced into a HumanMessage by add_messages, which
-            # silently mislabels the assistant's own reply as the user's
-            # when a thread is reloaded from the sidebar.
-            response = AIMessage(content=final_result.content)
+    
+            response = final_result.content
 
         else:
-            response = AIMessage(content=content_get.content)
+            response = content_get.content
 
     except RateLimitError:
         response = AIMessage(
@@ -128,12 +136,12 @@ graph.add_edge('chat_message', END)
 checkpointer = InMemorySaver()
 chat = graph.compile(checkpointer=checkpointer)
 
-# responce = chat.invoke(
+# response = chat.invoke(
 #             {'message': '2+2'}, 
 #             config={'configurable': {'thread_id': '--1--'}}, 
 #             )
 
 
-# responce = chat.get_state({'configurable': {'thread_id': '--1--'}})
+# response = chat.get_state({'configurable': {'thread_id': '--1--'}})
 
-# print(responce.values.get('message')[1].content)
+# print(response.values.get('message')[1].content)
