@@ -27,7 +27,7 @@ llm = ChatGroq(model='llama-3.3-70b-versatile', temperature=0.2)
 
 # ********************Embedding**********************
 EMBED_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".hf_cache")
-EMBED_MODEL = "all-MiniLM-L6-v2"
+EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 _embeddings_instance = None
 _vectorstore_cache = {}
@@ -39,18 +39,24 @@ def _get_embeddings() -> HuggingFaceEmbeddings:
     if _embeddings_instance is None:
         _embeddings_instance = HuggingFaceEmbeddings(
             model_name=EMBED_MODEL,
-            cache_folder=EMBED_CACHE,
+
         )
     return _embeddings_instance
 
 
 def _get_vectorstore(collection_name: str = "file_embeddings") -> Chroma:
     if collection_name not in _vectorstore_cache:
-        _vectorstore_cache[collection_name] = Chroma(
-            persist_directory="vectorstore",
-            embedding_function=_get_embeddings(),
-            collection_name=collection_name,
+        VECTORSTORE_DIR = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "vectorstore"
         )
+
+    _vectorstore_cache[collection_name] = Chroma(
+        persist_directory=VECTORSTORE_DIR,
+        embedding_function=_get_embeddings(),
+        collection_name=collection_name,
+        )
+    
     return _vectorstore_cache[collection_name]
 
 def clear_collection(collection_name: str = "file_embeddings") -> None:

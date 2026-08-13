@@ -1,5 +1,7 @@
 myenv/
-.hf_cache
+.hf_cache/
+vectorstore/
+.uploaded_files/
+__pycache__/
+*.pyc
 .env
-.uploaded_files
-vectorstore
