@@ -2,7 +2,7 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from chat_app_backend_rag import generate_output, _get_vectorstore
 from langchain.tools import tool
 from sympy import sympify
-
+import streamlit as st
 
 _ddg_search = DuckDuckGoSearchRun()
 
@@ -32,7 +32,7 @@ def web_search(query: str) -> str:
         if not results:
             return "No relevant search results found."
         # print(results)
-        
+
         return results
     except Exception as e:
         return f"Error performing web search: {e}"
