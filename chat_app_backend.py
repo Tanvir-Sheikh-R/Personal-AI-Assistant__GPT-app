@@ -12,7 +12,7 @@ from sympy import sympify
 from chat_app_backend_rag import generate_output, _get_vectorstore
 import streamlit as st
 from langgraph.prebuilt import ToolNode, tools_condition
-
+from functools import partial
 
 @tool
 def calculator(expression: str) -> str:
@@ -134,10 +134,10 @@ tools = [rag_tool, calculator]
 
 graph = StateGraph(MessageState)
 graph.add_node('chat_message', chat_message)
-graph.add_node('tools', ToolNode(tools))
+graph.add_node('tools', ToolNode(tools, messages_key="message"))
 
 graph.add_edge(START, 'chat_message')
-graph.add_conditional_edges("chat_message", tools_condition)
+graph.add_conditional_edges("chat_message",  partial(tools_condition, messages_key="message"),)
 graph.add_edge('tools', 'chat_message')
 
 checkpointer = InMemorySaver()
