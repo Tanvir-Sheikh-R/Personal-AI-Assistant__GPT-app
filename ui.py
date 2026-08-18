@@ -76,5 +76,9 @@ def load_page_style():
             visibility: visible !important;
         }
 
+        [data-testid="stMarkdownContainer"]{
+            margin-bottom: 0rem;
+        }
+
     </style>
     """, unsafe_allow_html=True)

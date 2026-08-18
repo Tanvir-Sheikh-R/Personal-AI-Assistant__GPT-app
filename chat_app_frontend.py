@@ -173,6 +173,14 @@ if user_input:
 
 CONFIG = {'configurable': {'thread_id': st.session_state.thread_id}}
 
+NODE_LABELS = {
+    'chat_message': 'Thinking',
+    'tools': 'Using tools',
+}
+
+
+# ---------------- Message Streaming----------------
+
 if user_input:
     st.session_state.message.append({'role': 'user', 'msg': text})
 
@@ -180,15 +188,50 @@ if user_input:
             st.write(text)
     
     with st.chat_message('assistant', avatar=":material/asterisk:"):
-        response = st.write_stream(
-            message_chunk.content
+        placeholder = st.empty()
+        def render_placeholder(label: str):
+            placeholder.markdown(
+                f"""
+                <style>
+                @keyframes pulse {{
+                    0%   {{ opacity: 0.3; }}
+                    50%  {{ opacity: 1; }}
+                    100% {{ opacity: 0.3; }}
+                }}
+                .thinking {{
+                    animation: pulse 1.4s ease-in-out infinite;
+                    font-style: italic;
+                    color: gray;
+                }}
+                </style>
+                <span class="thinking">{label}...</span>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        render_placeholder("Thinking")
+
+        def stream_wrapper():
+            first_chunk = True
             for message_chunk, metadata in chat.stream(
                 {'message': [HumanMessage(text)]},
                 config=CONFIG,
                 stream_mode='messages'
-            )
-            if isinstance(message_chunk, AIMessageChunk) and message_chunk.content
-        )
+            ):
+                node = metadata.get('langgraph_node')
+                label = NODE_LABELS.get(node, "Thinking")
+
+                if isinstance(message_chunk, AIMessageChunk) and message_chunk.content:
+                    if first_chunk:
+                        placeholder.empty()
+                        first_chunk = False
+                    yield message_chunk.content
+                else:
+                    # no visible content yet (tool_calls-only AIMessage, or ToolMessage)
+                    # update the label so it reflects the currently active node
+                    render_placeholder(label)
+
+        response = st.write_stream(stream_wrapper())
     st.session_state.message.append({'role': 'assistant', 'msg':  response})
 
     st.rerun()
