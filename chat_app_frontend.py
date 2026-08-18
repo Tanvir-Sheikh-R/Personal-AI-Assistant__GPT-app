@@ -5,7 +5,7 @@ from chat_app_backend import chat, get_summary_for_chatHead
 from langchain_core.messages import HumanMessage
 import uuid
 from pathlib import Path
-
+from langchain_core.messages import AIMessageChunk
 
 load_page_style()
 
@@ -179,13 +179,16 @@ if user_input:
     with st.chat_message('user'):
             st.write(text)
     
-    with st.chat_message('assistant' , avatar=":material/asterisk:"):
+    with st.chat_message('assistant', avatar=":material/asterisk:"):
         response = st.write_stream(
-            message_chunk.content for message_chunk, metadata in chat.stream(
-                {'message': [HumanMessage(text)]}, 
-                config=CONFIG, 
+            message_chunk.content
+            for message_chunk, metadata in chat.stream(
+                {'message': [HumanMessage(text)]},
+                config=CONFIG,
                 stream_mode='messages'
-            ))
+            )
+            if isinstance(message_chunk, AIMessageChunk) and message_chunk.content
+        )
     st.session_state.message.append({'role': 'assistant', 'msg':  response})
 
     st.rerun()

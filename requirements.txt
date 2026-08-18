@@ -13,3 +13,5 @@ pypdf
 sentence_transformers
 pydantic
 torchvision
+langchain-tavily
+ddgs

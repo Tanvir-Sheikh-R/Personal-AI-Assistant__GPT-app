@@ -22,7 +22,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="langchain
 
 load_dotenv()
 llm = ChatGroq(model='openai/gpt-oss-120b', temperature=0.2)
-
+llm_structured = ChatGroq(model='openai/gpt-oss-120b', temperature=0.2, disable_streaming=True)
 
 
 # ********************Embedding**********************
@@ -116,23 +116,25 @@ def generate_output(query:str, vector_store):
     class SimilarQueries(BaseModel):
         similar_queries : list[str] = Field(description="2 diverse queries related to the original query")
 
-    prompt_template = PromptTemplate(
-        template="""
-            Generate 2 more queries similar to the given query: {query}. 
-            keep the content relevant to the context of the query and make sure the queries are 
-            diverse and cover different aspects of the topic. Provide the queries in a list format.
-        """,
-        input_variables=['query']
-    )
+    try:
+        prompt_template = PromptTemplate(
+            template="""
+                Generate 2 more queries similar to the given query: {query}. 
+                keep the content relevant to the context of the query and make sure the queries are 
+                diverse and cover different aspects of the topic. Provide the queries in a list format.
+            """,
+            input_variables=['query']
+        )
 
-    prompt = prompt_template.format(query=query)
+        prompt = prompt_template.format(query=query)
+        structured_llm = llm_structured.with_structured_output(SimilarQueries)
+        result = structured_llm.invoke(prompt)
+        final_prompt = [query] + result.similar_queries
+    except Exception:
+        # fall back to just the original query if expansion fails
+        final_prompt = [query]
 
-    structured_llm = llm.with_structured_output(SimilarQueries)
-    result = structured_llm.invoke(prompt)
-    final_prompt = [query] + result.similar_queries
-
-    metadatas = []
-    content = []
+    metadatas, content = [], []
     for query in final_prompt:
         results = vector_store.max_marginal_relevance_search(query=query, k=3)
         content.extend([doc.page_content for doc in results])
