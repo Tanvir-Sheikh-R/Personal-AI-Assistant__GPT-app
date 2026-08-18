@@ -7,10 +7,6 @@ from langchain_community.document_loaders import (
     Docx2txtLoader,
     TextLoader,
 )
-import pytesseract
-from pdf2image import convert_from_path
-from langchain_core.documents import Document
-from pdf2image import convert_from_path, pdfinfo_from_path
 
 from langchain_chroma import Chroma
 from langchain_core.prompts import PromptTemplate
@@ -83,18 +79,13 @@ def add_documents_to_store(file_paths: list[str],
 
 
 
-MAX_OCR_PAGES = 15  # tune based on your deployment's memory headroom
 
 def _load_and_split(file_paths: list[str]):
     all_docs = []
     for file in file_paths:
         ext = file.split(".")[-1].lower()
         if ext == "pdf":
-            docs = PyPDFLoader(file).load()
-            total_text = sum(len(d.page_content.strip()) for d in docs)
-            if total_text < 20 * len(docs):
-                docs = _ocr_pdf(file)
-            all_docs.extend(docs)
+            all_docs.extend(PyPDFLoader(file).load())
         elif ext == "docx":
             all_docs.extend(Docx2txtLoader(file).load())
         elif ext in ("txt", "md"):
@@ -108,58 +99,6 @@ def _load_and_split(file_paths: list[str]):
         separators=["\n\n\n", "\n\n", "\n", "  ", " ", ""],
     )
     return splitter.split_documents(all_docs)
-
-
-def _ocr_pdf(file_path: str) -> list[Document]:
-    """OCR a scanned PDF page-by-page into LangChain Documents, with a page-count guard."""
-    try:
-        info = pdfinfo_from_path(file_path)
-        page_count = info.get("Pages", 0)
-    except Exception:
-        page_count = 0
-
-    if page_count > MAX_OCR_PAGES:
-        st.warning(
-            f"'{os.path.basename(file_path)}' looks like a scanned PDF with {page_count} pages, "
-            f"which exceeds the {MAX_OCR_PAGES}-page OCR limit for this app. "
-            f"Only the first {MAX_OCR_PAGES} pages will be processed."
-        )
-        images = convert_from_path(file_path, first_page=1, last_page=MAX_OCR_PAGES)
-    else:
-        with st.spinner(f"Running OCR on scanned PDF '{os.path.basename(file_path)}'..."):
-            images = convert_from_path(file_path)
-
-    docs = []
-    with st.spinner(f"Extracting text from {len(images)} page(s)..."):
-        for i, image in enumerate(images):
-            text = pytesseract.image_to_string(image)
-            if text.strip():
-                docs.append(Document(
-                    page_content=text,
-                    metadata={"source": file_path, "page": i}
-                ))
-    return docs
-
-
-# def _load_and_split(file_paths: list[str]):
-#     all_docs = []
-#     for file in file_paths:
-#         ext = file.split(".")[-1].lower()
-#         if ext == "pdf":
-#             all_docs.extend(PyPDFLoader(file).load())
-#         elif ext == "docx":
-#             all_docs.extend(Docx2txtLoader(file).load())
-#         elif ext in ("txt", "md"):
-#             all_docs.extend(TextLoader(file, encoding="utf-8").load())
-#         else:
-#             raise ValueError(f"Unsupported file type: {ext}")
-
-#     splitter = RecursiveCharacterTextSplitter(
-#         chunk_size=800,
-#         chunk_overlap=150,
-#         separators=["\n\n\n", "\n\n", "\n", "  ", " ", ""],
-#     )
-#     return splitter.split_documents(all_docs)
 
 
 
