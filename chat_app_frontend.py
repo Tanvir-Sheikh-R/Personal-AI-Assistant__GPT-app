@@ -90,7 +90,13 @@ with st.sidebar:
 
 
     st.header('Chat history')
-    st.divider()
+    # st.divider()
+    st.markdown("""
+            <hr style="margin-top: -0.5rem, margin-bottom: -0.5rem;">
+        """,
+        unsafe_allow_html=True
+    )
+
 
     for id in st.session_state.thread_id_list[::-1]:
         conversation = load_conversation(id)

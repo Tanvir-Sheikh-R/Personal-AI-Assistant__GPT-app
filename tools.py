@@ -31,7 +31,8 @@ def web_search(query: str) -> str:
         results = _ddg_search.invoke(query)
         if not results:
             return "No relevant search results found."
-        print(results)
+        # print(results)
+        
         return results
     except Exception as e:
         return f"Error performing web search: {e}"
