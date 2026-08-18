@@ -10,15 +10,23 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from functools import partial
 from prompts import SYSTEM_PROMPT
 from tools import calculator, rag_tool, web_search
-
+from llm_router import invoke_with_fallback
+from pydantic import BaseModel, Field
+from langchain_core.prompts import PromptTemplate
+from chat_app_backend_rag import generate_output, _get_vectorstore, llm_structured
 
 load_dotenv()
-llm = ChatGroq(model='openai/gpt-oss-120b', temperature=0.2)
+
+MODEL_CHAIN = [
+    ChatGroq(model='openai/gpt-oss-120b', temperature=0.2),
+    ChatGroq(model='openai/gpt-oss-20b', temperature=0.2),
+    ChatGroq(model='qwen/qwen3.6-27b', temperature=0.2),
+]
 
 tools = [rag_tool, calculator, web_search]
-llm_with_tools = llm.bind_tools(tools)
+llm_chain_with_tools = [m.bind_tools(tools) for m in MODEL_CHAIN]
 
-
+llm = MODEL_CHAIN[0]
 
 def get_summary_for_chatHead(user: str):
     prompt = f"""Generate a short, descriptive title for this conversation based on the user's message below. 
@@ -34,9 +42,52 @@ def get_summary_for_chatHead(user: str):
     return response.content
 
 
+class AnswerCheck(BaseModel):
+    is_relevant: bool = Field(description="True if the answer actually addresses the user's question")
+    reason: str = Field(description="Brief explanation of the judgment")
+
 
 class MessageState(TypedDict):
     message : Annotated[list[BaseMessage], add_messages]
+
+
+
+
+def _check_answer(question: str, answer: str) -> AnswerCheck:
+    check_prompt = PromptTemplate(
+        template="""
+            You are checking whether an AI-generated answer actually addresses the user's question.
+
+            Question: {question}
+            Answer: {answer}
+
+            Judge whether the answer is relevant and actually responds to the question.
+            Be strict but fair.
+        """,
+        input_variables=['question', 'answer']
+    )
+    prompt = check_prompt.format(question=question, answer=answer)
+    checker_llm = llm_structured.with_structured_output(AnswerCheck)
+    return checker_llm.invoke(prompt)
+
+
+def check_answer_node(state: MessageState):
+    message = list(state['message'])
+    last_ai = message[-1]
+    last_human = next(m for m in reversed(message) if isinstance(m, HumanMessage))
+
+    try:
+        check = _check_answer(last_human.content, last_ai.content)
+        if not check.is_relevant:
+            return {'message': [AIMessage(
+                content="I wasn't able to generate a reliable answer to that. "
+                        "Could you try rephrasing your question?"
+            )]}
+    except Exception:
+        pass
+
+    return {'message': []}
+
 
 
 def chat_message(state: MessageState):
@@ -44,27 +95,21 @@ def chat_message(state: MessageState):
     message = list(state['message'])
     if not any(isinstance(m, SystemMessage) for m in message):
         message = [SYSTEM_PROMPT] + message
-    try:
-        response = llm_with_tools.invoke(message)
 
+    try:
+        response = invoke_with_fallback(message, tools=tools)
     except RateLimitError:
         response = AIMessage(
-            content="I've hit the rate/token limit for this model right now. "
+            content="I've hit rate limits on all available models right now. "
                     "Please wait a moment and try again."
         )
     except APIConnectionError:
-        response = AIMessage(
-            content="I'm having trouble connecting to the model service right now. "
-                    "Please check your connection and try again."
-        )
+        response = AIMessage(content="I'm having trouble connecting to the model service right now. Please check your connection and try again.")
     except APIError as e:
-        response = AIMessage(
-            content=f"Something went wrong while generating a response: {e}"
-        )
+        response = AIMessage(content=f"Something went wrong while generating a response: {e}")
     except Exception as e:
-        response = AIMessage(
-            content=f"An unexpected error occurred: {e}"
-        )
+        response = AIMessage(content=f"An unexpected error occurred: {e}")
+
     return {'message': [response]}
 
 
@@ -72,10 +117,16 @@ def chat_message(state: MessageState):
 graph = StateGraph(MessageState)
 graph.add_node('chat_message', chat_message)
 graph.add_node('tools', ToolNode(tools, messages_key="message"))
+graph.add_node('check_answer', check_answer_node)
 
 graph.add_edge(START, 'chat_message')
-graph.add_conditional_edges("chat_message",  partial(tools_condition, messages_key="message"),)
+graph.add_conditional_edges(
+    "chat_message",
+    partial(tools_condition, messages_key="message"),
+    {"tools": "tools", END: "check_answer"},
+)
 graph.add_edge('tools', 'chat_message')
+graph.add_edge('check_answer', END)
 
 checkpointer = InMemorySaver()
 chat = graph.compile(checkpointer=checkpointer)

@@ -25,5 +25,6 @@ SYSTEM_PROMPT = SystemMessage(
         - When a tool returns a result, state it directly and concisely as part of your answer.
         - Don't re-derive, re-verify, or second-guess a calculation the tool already computed — trust and report it.
         - Don't dump raw tool output verbatim if it's not already meant to be read as-is; fold it naturally into your response.
+        - check for duplicate results, if founded give a proper single answer.
     """)
 

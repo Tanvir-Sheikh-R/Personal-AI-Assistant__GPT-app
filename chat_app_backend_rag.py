@@ -7,7 +7,7 @@ from langchain_community.document_loaders import (
     Docx2txtLoader,
     TextLoader,
 )
-
+from llm_router import invoke_with_fallback 
 from langchain_chroma import Chroma
 from langchain_core.prompts import PromptTemplate
 from langchain_huggingface import HuggingFaceEmbeddings, embeddings
@@ -116,10 +116,11 @@ def delete_documents_from_store(file_paths: list[str],
 
 
 
-def generate_output(query:str, vector_store):
+
+def generate_output(query: str, vector_store):
 
     class SimilarQueries(BaseModel):
-        similar_queries : list[str] = Field(description="2 diverse queries related to the original query")
+        similar_queries: list[str] = Field(description="2 diverse queries related to the original query")
 
     try:
         prompt_template = PromptTemplate(
@@ -136,12 +137,11 @@ def generate_output(query:str, vector_store):
         result = structured_llm.invoke(prompt)
         final_prompt = [query] + result.similar_queries
     except Exception:
-        # fall back to just the original query if expansion fails
         final_prompt = [query]
 
     metadatas, content = [], []
-    for query in final_prompt:
-        results = vector_store.max_marginal_relevance_search(query=query, k=3)
+    for q in final_prompt:
+        results = vector_store.max_marginal_relevance_search(query=q, k=3)
         content.extend([doc.page_content for doc in results])
         metadatas.extend([doc.metadata for doc in results])
 
@@ -155,12 +155,9 @@ def generate_output(query:str, vector_store):
         input_variables=['query', 'context']
     )
     prompt = prompt_query.format(query=query, context=content, metadatas=metadatas)
-    final_output = llm.invoke(prompt)
+    final_output = invoke_with_fallback(prompt)   # <-- CHANGED from llm.invoke(prompt)
 
     return final_output.content
-
-
-
 
 # @tool
 # def rag_tool(query : str):

@@ -91,11 +91,11 @@ with st.sidebar:
 
     st.header('Chat history')
     # st.divider()
-    st.markdown("""
-            <hr style="margin-top: -0.5rem, margin-bottom: -0.5rem;">
-        """,
-        unsafe_allow_html=True
-    )
+    # st.markdown("""
+    #         <hr style="margin-top: -1rem, margin-bottom: -0.5rem;">
+    #     """,
+    #     unsafe_allow_html=True
+    # )
 
 
     for id in st.session_state.thread_id_list[::-1]:
@@ -164,9 +164,10 @@ if user_input:
             if new_paths:
                 try:
                     add_documents_to_store(new_paths, collection_name=st.session_state['kb_id'])
-                    st.session_state['indexed_files'].update(
-                        Path(p).name for p in new_paths
-                    )
+                    with st.spinner("Loading embeddings and processing document..."):
+                        st.session_state['indexed_files'].update(
+                            Path(p).name for p in new_paths
+                        )
                 except Exception as e:
 
                     indexing_failed = True
@@ -217,8 +218,14 @@ if user_input:
 
         render_placeholder("Thinking")
 
+# ----------------- output buffer for thinking and remove duplicate ----------------------
+
         def stream_wrapper():
-            first_chunk = True
+            buffer = ""
+            current_id = None
+            has_tool_call = False
+            first_flush = True
+
             for message_chunk, metadata in chat.stream(
                 {'message': [HumanMessage(text)]},
                 config=CONFIG,
@@ -227,15 +234,37 @@ if user_input:
                 node = metadata.get('langgraph_node')
                 label = NODE_LABELS.get(node, "Thinking")
 
-                if isinstance(message_chunk, AIMessageChunk) and message_chunk.content:
-                    if first_chunk:
-                        placeholder.empty()
-                        first_chunk = False
-                    yield message_chunk.content
-                else:
-                    # no visible content yet (tool_calls-only AIMessage, or ToolMessage)
-                    # update the label so it reflects the currently active node
+                # Not the chat_message node (e.g. tools, check_answer) -> just update the label
+                if node != 'chat_message':
                     render_placeholder(label)
+                    continue
+
+                if not isinstance(message_chunk, AIMessageChunk):
+                    continue
+
+                if message_chunk.id != current_id:
+                    if buffer and not has_tool_call:
+                        if first_flush:
+                            placeholder.empty()
+                            first_flush = False
+                        yield buffer
+                    buffer = ""
+                    has_tool_call = False
+                    current_id = message_chunk.id
+
+                if message_chunk.tool_call_chunks:
+                    has_tool_call = True
+
+                if message_chunk.content:
+                    buffer += message_chunk.content
+                else:
+                    render_placeholder(label)
+
+            if buffer and not has_tool_call:
+                if first_flush:
+                    placeholder.empty()
+                    first_flush = False
+                yield buffer
 
         response = st.write_stream(stream_wrapper())
     st.session_state.message.append({'role': 'assistant', 'msg':  response})
