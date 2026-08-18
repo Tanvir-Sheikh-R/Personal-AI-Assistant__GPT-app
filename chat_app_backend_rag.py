@@ -51,12 +51,12 @@ def _get_vectorstore(collection_name: str = "file_embeddings") -> Chroma:
         "vectorstore"
         )
 
-    _vectorstore_cache[collection_name] = Chroma(
-        persist_directory=VECTORSTORE_DIR,
-        embedding_function=_get_embeddings(),
-        collection_name=collection_name,
-        )
-    
+        _vectorstore_cache[collection_name] = Chroma(
+            persist_directory=VECTORSTORE_DIR,
+            embedding_function=_get_embeddings(),
+            collection_name=collection_name,
+            )
+        
     return _vectorstore_cache[collection_name]
 
 def clear_collection(collection_name: str = "file_embeddings") -> None:
