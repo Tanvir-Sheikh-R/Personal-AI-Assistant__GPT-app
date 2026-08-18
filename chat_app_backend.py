@@ -87,8 +87,10 @@ def chat_message(state: MessageState):
     # Copy instead of mutating the reducer-owned list from state directly.
     message = list(state['message'])
     try:
-        content_get = llm_with_tools.invoke(message)
-        message.append(content_get)
+        response = llm_with_tools.invoke(message)
+
+        # content_get = llm_with_tools.invoke(message)
+        # message.append(content_get)
 
         # if content_get.tool_calls:
         #     for tool_call in content_get.tool_calls:
