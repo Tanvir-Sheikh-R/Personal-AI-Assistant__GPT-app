@@ -11,7 +11,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from sympy import sympify
 from chat_app_backend_rag import generate_output, _get_vectorstore
 import streamlit as st
-
+from langgraph.prebuilt import ToolNode, tools_condition
 
 
 @tool
@@ -90,23 +90,23 @@ def chat_message(state: MessageState):
         content_get = llm_with_tools.invoke(message)
         message.append(content_get)
 
-        if content_get.tool_calls:
-            for tool_call in content_get.tool_calls:
-                if tool_call["name"] == "rag_tool":
-                    output = rag_tool.invoke(tool_call["args"])
+        # if content_get.tool_calls:
+        #     for tool_call in content_get.tool_calls:
+        #         if tool_call["name"] == "rag_tool":
+        #             output = rag_tool.invoke(tool_call["args"])
 
-                elif tool_call["name"] == "calculator":
-                    output = calculator.invoke(tool_call["args"])
-                else:
-                    output = f"Error: unknown tool '{tool_call['name']}'"
-                message.append(ToolMessage(content=str(output), tool_call_id=tool_call["id"]))
+        #         elif tool_call["name"] == "calculator":
+        #             output = calculator.invoke(tool_call["args"])
+        #         else:
+        #             output = f"Error: unknown tool '{tool_call['name']}'"
+        #         message.append(ToolMessage(content=str(output), tool_call_id=tool_call["id"]))
 
-            final_result = llm.invoke(message)
+        #     final_result = llm.invoke(message)
     
-            response = final_result.content
+        #     response = final_result.content
 
-        else:
-            response = content_get.content
+        # else:
+        #     response = content_get.content
 
     except RateLimitError:
         response = AIMessage(
@@ -128,11 +128,15 @@ def chat_message(state: MessageState):
         )
     return {'message': [response]}
 
+tools = [rag_tool, calculator]
 
 graph = StateGraph(MessageState)
 graph.add_node('chat_message', chat_message)
+graph.add_node('tools', ToolNode(tools))
+
 graph.add_edge(START, 'chat_message')
-graph.add_edge('chat_message', END)
+graph.add_conditional_edges("chat_message", tools_condition)
+graph.add_edge('tools', 'chat_message')
 
 checkpointer = InMemorySaver()
 chat = graph.compile(checkpointer=checkpointer)
