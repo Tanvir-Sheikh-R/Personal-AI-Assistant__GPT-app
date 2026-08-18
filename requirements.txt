@@ -15,5 +15,3 @@ pydantic
 torchvision
 langchain-tavily
 ddgs
-tesseract-ocr
-poppler-utils
