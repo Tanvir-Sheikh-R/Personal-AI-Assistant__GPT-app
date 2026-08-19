@@ -1,8 +1,11 @@
 from langchain_community.tools import DuckDuckGoSearchRun
 from chat_app_backend_rag import generate_output, _get_vectorstore
+from langgraph.prebuilt import InjectedState
+from typing import Annotated
 from langchain.tools import tool
 from sympy import sympify
 import streamlit as st
+
 
 _ddg_search = DuckDuckGoSearchRun()
 
@@ -57,7 +60,7 @@ def calculator(expression: str) -> str:
 
 
 @tool
-def rag_tool(query : str):
+def rag_tool(query: str, state: Annotated[dict, InjectedState]) -> str:
 
     """Search and retrieve relevant information from the user's uploaded documents 
     or knowledge base.
@@ -85,5 +88,5 @@ def rag_tool(query : str):
     """
 
 
-    vector_store = _get_vectorstore(st.session_state.get('kb_id', 'file_embeddings'))
+    vector_store = _get_vectorstore(state.get('kb_id', 'file_embeddings'))
     return generate_output(query, vector_store)

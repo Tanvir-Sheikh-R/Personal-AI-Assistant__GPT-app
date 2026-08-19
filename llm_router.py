@@ -1,5 +1,8 @@
 from langchain_groq import ChatGroq
 from groq import RateLimitError
+from dotenv import load_dotenv
+
+load_dotenv()
 
 MODEL_CHAIN = [
     ChatGroq(model='openai/gpt-oss-120b', temperature=0.2),

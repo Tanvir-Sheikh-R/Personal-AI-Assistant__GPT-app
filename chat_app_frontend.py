@@ -227,7 +227,7 @@ if user_input:
             first_flush = True
 
             for message_chunk, metadata in chat.stream(
-                {'message': [HumanMessage(text)]},
+                {'message': [HumanMessage(text)], 'kb_id': st.session_state['kb_id']},
                 config=CONFIG,
                 stream_mode='messages'
             ):

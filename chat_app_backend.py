@@ -49,7 +49,7 @@ class AnswerCheck(BaseModel):
 
 class MessageState(TypedDict):
     message : Annotated[list[BaseMessage], add_messages]
-
+    kb_id: str
 
 
 
