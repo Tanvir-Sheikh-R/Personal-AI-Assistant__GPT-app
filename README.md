@@ -4,6 +4,7 @@ A conversational AI chatbot built with LangGraph and Streamlit, powered by Groq'
 
 🔗 **Live Demo:** [ai-chatbot-groqllm.streamlit.app](https://ai-chatbot-groqllm.streamlit.app/)
 
+
 ## Features
 
 - Real-time streaming responses (token-by-token)
@@ -21,7 +22,9 @@ A conversational AI chatbot built with LangGraph and Streamlit, powered by Groq'
 - **Frontend:** Streamlit
 - **Storage:** SQLite (in-memory checkpointer)
 
+
 ## Getting Started
+
 
 ### Prerequisites
 
